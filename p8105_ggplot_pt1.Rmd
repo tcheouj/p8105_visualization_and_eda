@@ -1,0 +1,387 @@
+---
+title: "p8105_ggplot_pt1"
+author: "Johnstone Tcheou"
+date: "2024-09-26"
+output: html_document
+---
+
+# `ggplot` pt 1
+
+## Why `ggplot`
+
+Simplifies graphics to a system that can be applied to other graphics systems - if you know `ggplot`, you can get your head around `leaflet` and other visualization packages
+
+## Learning `ggplot`
+
+There are some things you will need to know and some things you can search up
+
+## Using ggplot
+
+Focusing on first part of basic graph components today
+
+- Data (always start with dataframe first)
+- Aesthetic mappings (variables in dataframe will map to specific aesthetics - axes, density, color, etc)
+- `geoms` (what kind of a graph are you actually trying to make - what are the geometries you want to include)
+
+Advanced graph components include
+
+- Facets
+- Scales
+- Statistics
+
+Graphs are built by combining these components
+Components are consistent across graph types - scatterplots, bar graphs, density plots, ridge pltos 
+
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(ggridges)
+```
+
+## `rnoaa` import data
+
+`rnoaa` is a way to interact with the data that they make public 
+This code chunk pulls the data, then `mutate`  to create a variable more intuitive than `id` - their actual locations, divide `tmin` and `tmax` by 10, and then just reorders the variables with `select` so `name` and `id` come first 
+
+```{r rnoaa import}
+weather_df <- 
+  rnoaa::meteo_pull_monitors(
+    c("USW00094728", "USW00022534", "USS0023B17S"),
+    var = c("PRCP", "TMIN", "TMAX"), 
+    date_min = "2021-01-01",
+    date_max = "2022-12-31") |>
+  mutate(
+    name = case_match(
+      id, 
+      "USW00094728" ~ "CentralPark_NY", 
+      "USW00022534" ~ "Molokai_HI",
+      "USS0023B17S" ~ "Waterhole_WA"),
+    tmin = tmin / 10,
+    tmax = tmax / 10) |>
+  select(name, id, everything())
+```
+
+## Making our first plot
+
+Define dataset
+Define aesthetic mappings
+Then define geometries afterwards
+
+Might want to run the `ggplot` function with just the x and y axes specified to ensure that our scales are as what we intend it to 
+
+Both function calls below work, but sometimes you may prefer the latter structure in case you want to do something to data like `filter` and then pipe it into `ggplot` once you've done some data manipulation, as is common
+
+You can also save `ggplot` objects to a variable - call it to display it 
+
+If you want your plot images to show up on GitHub, named after their chunks accordingly, will need to commit
+
+Note that whenever running `ggplot`, error message that **17 rows removed containing missing values or values outside scale range** 
+
+Can check for rows with missing values for `tmin` or `tmax` 
+
+```{r first_plot}
+ggplot(weather_df, aes(x=tmin, y=tmax, color=name)) +
+  geom_point()
+
+weather_df |>
+  ggplot(aes(x=tmin, y=tmax, color=name)) +
+  geom_point()
+
+weather_df |>
+  filter(is.na(tmin) | is.na(tmax))
+```
+
+## More complicated graphs
+
+`alpha` option designates shading/transparency
+`size` makes things smaller
+`geom_smooth` creates a smooth curve regression line through data, where `se` option is the standard error calculated in the curve - `FALSE` turns it off
+**Where you place your aesthetics matter** - declaring the aesthetic in one geometry alone is restricted to that geometry 
+e.g. `geom_smooth` no longer gets color by name, it is just one color
+If you do not get the output you intended, probably an **aesthetic mismatch** somewhere
+
+```{r complicated_graphs}
+weather_df |>
+  ggplot(aes(x = tmin, y = tmax, color = name)) +
+  geom_point(alpha = 0.3, size = 0.8) +
+  geom_smooth(se=FALSE)
+
+
+weather_df |>
+  ggplot(aes(x = tmin, y = tmax)) +
+  geom_point(aes(color = name), alpha = 0.3, size = 0.8) +
+  geom_smooth(se=FALSE)
+```
+
+## Faceting 
+
+**Faceting** lets us 
+If points are overlapping too much, we can separate into scatterplot for each one with `facet_grid`
+`~` in `facet_grid` specifies what rows are on left side and what columns are in the grid on right side 
+`.` designates nothing in that side
+`.` in rows puts scatterplots in columns first, `.` in columns puts scatterplots in rows first
+Columns first is preferred for Jeff, but comes down to personal preference
+
+```{r faceting}
+weather_df |>
+  ggplot(aes(x = tmin, y = tmax, color = name)) +
+  geom_point(alpha = 0.3, size = 0.8) +
+  geom_smooth(se=FALSE) + 
+  facet_grid(. ~ name)
+
+weather_df |>
+  ggplot(aes(x = tmin, y = tmax, color = name)) +
+  geom_point(alpha = 0.3, size = 0.8) +
+  geom_smooth(se=FALSE) + 
+  facet_grid(name ~ .)
+
+```
+
+## More interesting scatterplot
+
+Add aesthetic so size is based on precipitation level with `size` option, where more precipitation = larger circle, less precipitation = smaller circle 
+Warm in Seattle during summer and no rain, but in winter, cooler and tons of rain
+
+```{r interesting_scatterplot}
+weather_df |>
+  ggplot(aes(x = date, y = tmax, color = name, size = prcp)) + 
+  geom_point(alpha = 0.3) + 
+  geom_smooth(se = FALSE) + 
+  facet_grid(. ~ name)
+
+weather_df |>
+  filter(name == "CentralPark_NY") |>
+  ggplot(aes(x = date, y = tmax, size = prcp)) + 
+  geom_point(alpha = 0.3) + 
+  geom_smooth(se = FALSE) 
+
+```
+
+## Learning assessment
+
+Shows that we don't want to overwrite and change up original data, sometimes we just want to visualize small portions or components of the data 
+Hence, we can have a pipe like this that doesn't overwrite the original dataset
+
+```{r learning_assessment}
+weather_df |>
+  filter(name == "CentralPark_NY") |>
+  mutate(
+    tmax_f = tmax * 9/5 + 32,
+    tmin_f = tmin * 9/5 + 32
+  ) |>
+  ggplot(aes(x = tmin_f, y = tmax_f)) + 
+  geom_point(alpha = 0.3) + 
+  geom_smooth(se = FALSE) 
+```
+
+## geom_smooth
+
+`?geom_smooth` to get details on `method`, where we can change the smoothing method from `loess` default to `lm` for linear model, giving us straight line instead
+
+```{r geom_smooth_method}
+weather_df |>
+  filter(name == "CentralPark_NY") |>
+  mutate(
+    tmax_f = tmax * 9/5 + 32,
+    tmin_f = tmin * 9/5 + 32
+  ) |>
+  ggplot(aes(x = tmin_f, y = tmax_f)) + 
+  geom_point(alpha = 0.3) + 
+  geom_smooth(se = FALSE) 
+
+weather_df |>
+  filter(name == "CentralPark_NY") |>
+  mutate(
+    tmax_f = tmax * 9/5 + 32,
+    tmin_f = tmin * 9/5 + 32
+  ) |>
+  ggplot(aes(x = tmin_f, y = tmax_f)) + 
+  geom_point(alpha = 0.3) + 
+  geom_smooth(se = FALSE, method = lm) 
+```
+## Small things
+
+Can mix and match elements accordingly, like removing the data points but keeping the regression models
+
+Say maybe you run a scatterplot like this but you have tens and tens of thousands of data points - becomes hard to distinguish points from each other
+`geom_hex` shows where you have the highest peaks in your data
+
+Can also set all points to one color
+`"blue"` sets everything to one color, but `blue` sets everything to red  
+What `ggplot` is doing is creating a variable called `"blue"` of all blue things 
+When using `blue`, it tries to look for a variable called `blue` which is not set yet, and fails, so it uses red by default
+
+How to know when something needs to be in quotes or not?
+If something is a variable name, does not need to be in quotes
+If not a variable name, usually needs to be in quotes
+
+```{r all_the}
+weather_df |>
+  ggplot(aes(x = tmin, y = tmax, color = name)) +
+  geom_smooth(se=FALSE)
+
+weather_df |>
+  ggplot(aes(x = tmin, y = tmax, color = name)) +
+  geom_point()
+
+weather_df |>
+  ggplot(aes(x = tmin, y = tmax, color = name)) +
+  geom_hex()
+
+weather_df |>
+  ggplot(aes(x = tmin, y = tmax, color = blue)) +
+  geom_point()
+
+weather_df |>
+  ggplot(aes(x = tmin, y = tmax, color = "blue")) +
+  geom_point()
+```
+
+## Univariate plots
+
+Same stuff as every other plot, take data, give aesthetic mapping, tell it geometries to use 
+Gets wonky when trying to compare, like when `color` is name, tons of overlapping bars
+`position = dodge` ensures that scatterplot bars are next to each other than on top of each other 
+Scatterplot is still hard to read but perhaps is more understandable 
+Maybe want to use `facet_grid` to separate out each group based on `name`
+If you want to compare everything all at once, maybe use different plot type instead of histogram, like a density plot which are like smooth histograms
+Histogram just reveals the spread and distribution of our data by each group 
+If you want to talk about features of datasets, **distribution is really helpful**
+`geom_density` allows us to make more quick and easy comparisons
+(also if you want to fill bar instead of coloring outline as `color` does, use `fill`)
+
+```{r histogram}
+weather_df |>
+  ggplot(aes(x = tmin)) + 
+  geom_histogram()
+
+weather_df |>
+  ggplot(aes(x = tmin, fill = name)) + 
+  geom_histogram()
+
+weather_df |>
+  ggplot(aes(x = tmin, fill = name)) + 
+  geom_histogram(position = "dodge")
+
+weather_df |>
+  ggplot(aes(x = tmin, fill = name)) + 
+  geom_histogram(position = "dodge")
+
+weather_df |>
+  ggplot(aes(x = tmin, fill = name)) + 
+  geom_density(alpha = 0.3)
+```
+
+## Box plots
+
+`name` on x axis, `tmin` on y axis
+In this case, `color` not all too useful since names are already on x axis, but maybe color helps reinforce the names or you want to maintain color consistency across figures
+
+```{r box}
+weather_df |>
+  ggplot(aes(x = name, y = tmin, fill = name)) + 
+  geom_boxplot()
+```
+
+## Violin plots
+
+Violin plots work by taking density plots and flipping them
+You get everything from density or ridge plots, but making them vertical
+Jeff prefers violin plots over box plots to see things more accurately about distribution like skew, multimodal, etc
+Sometimes boxes cannot reflect multimodal nature of some datasets, so violin plots more revealing 
+
+```{r violin}
+weather_df |>
+  ggplot(aes(x = name, y = tmin, fill = name)) + 
+  geom_violin()
+```
+
+## Ridge plots
+
+Ridge plots will try to create separate densities for each variable and spread them across on y axis
+`ggridges` package is where `geom_density_ridges` are - ensure you have the packages installed and loaded
+`geom_density_ridges` provides each density, **separated out and vertically**, for quick and easy visual comparison
+Central Park looks bimodal, and Waterhole looks somewhat bimodal 
+
+```{r ridge}
+weather_df |>
+  ggplot(aes(x = tmin, y = name)) + 
+  geom_density_ridges()
+```
+
+## Learning assessment
+
+Since it is hard to see things just outside of the tail, 
+
+Box plots show a little more detail about skewness and distribution - per outliers, most days it does not rain
+But if we want to look at days where it is raining, filter for days where precipitation is > 0 or > 10
+If you have an outlier that is really stretching the axis scale, you can run another visualization that omits the one outlier 
+
+```{r learning_assessment_2}
+weather_df |>
+  ggplot(aes(x = prcp, fill = name)) + 
+  geom_histogram(position = "dodge")
+
+weather_df |>
+  ggplot(aes(x = prcp, fill = name)) + 
+  geom_density()
+
+weather_df |>
+  ggplot(aes(x = name, y = prcp, fill = name)) + 
+  geom_boxplot()
+
+weather_df |>
+  ggplot(aes(x = name, y = prcp, fill = name)) + 
+  geom_violin()
+
+weather_df |>
+  ggplot(aes(x = prcp, y = name, fill = name)) + 
+  geom_density_ridges()
+
+
+
+weather_df |>
+  filter(prcp > 10) |>
+  ggplot(aes(x = prcp, fill = name)) + 
+  geom_density()
+
+
+```
+
+## Saving and embedding plots
+
+As seen before, `ggsave` lets us save a plot to file format we prefer and name it as we desire
+By default, `ggsave` saves the most recent plot 
+If we know there's a plot we want to save that might not be the most recent plot, then we can **save that desired plot as a variable, and then use `ggsave` on it
+We can also set `width` and `height` in the `ggsave` function
+If you know you'll be creating a lot of plots, may be worth making a separate folder for plots and saving your plots there
+
+```{r save}
+weather_df |>
+  ggplot(aes(x = date, y = tmax, color = name)) +
+  geom_point()
+
+ggsave("ggp_weather.pdf")
+
+ggp_weather <- weather_df |>
+  ggplot(aes(x = date, y = tmax, color = name)) +
+  geom_point()
+
+ggsave("plots/ggp_weather.pdf", ggp_weather, width = 8, height = 6)
+
+```
+
+To embed, use chunk options to determine figure width and figure height
+In background, R made figure that it tried to fit to the R Markdown format
+Then it shrunk down to fit per our specified width and height, which affects how some things are displayed like text
+`fig.asp` sets aspect ratio like 0.6, 60% as high as it is wide
+We can set some of these chunk options to be global options 
+
+```{r embed, fig.width=12, fig.asp=0.6}
+weather_df |>
+  ggplot(aes(x = date, y = tmax, color = name)) +
+  geom_point()
+
+```
+
